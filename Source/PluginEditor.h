@@ -53,7 +53,7 @@ private:
 
     bool        draggingThreshold = false;
     bool        waitingForKey     = false;   // esperando que el usuario elija la tecla de reset
-    juce::juce_wchar  resetKey          = 'Ñ';     // tecla de reset (por defecto Ñ)
+    juce::juce_wchar  resetKey          = 'r';     // tecla de reset (por defecto r)
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MonoCheckEditor)
 };
