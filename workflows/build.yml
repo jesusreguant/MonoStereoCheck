@@ -1,0 +1,84 @@
+name: Build MonoCheck (macOS PKG + Windows VST3)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ macos-latest, windows-latest ]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        shell: bash
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCOPY_AFTER_BUILD=OFF
+
+      - name: Build
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build build --config Release 2>&1 | tee build.log
+
+      - name: Mostrar errores de compilacion
+        if: failure()
+        shell: bash
+        run: |
+          grep -E "error( C[0-9]+)?:|fatal error|Error [0-9]" build.log | head -n 20 | while IFS= read -r line; do echo "::error::${line}"; done || true
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          VERSION="$(grep -m1 '^project' CMakeLists.txt | sed -E 's/.*VERSION ([0-9.]+).*/\1/')"
+          VST3="$(find build -maxdepth 5 -name 'MonoCheck.vst3' -type d | head -n 1)"
+          AU="$(find build -maxdepth 5 -name 'MonoCheck.component' -type d | head -n 1)"
+          echo "Version: $VERSION"
+          echo "VST3: $VST3"
+          echo "AU: $AU"
+          codesign --force --deep --sign - "$VST3"
+          codesign --force --deep --sign - "$AU"
+
+          # ZIP solo con el VST3
+          ditto -c -k --keepParent "$VST3" MonoCheck-VST3-macOS.zip
+
+          # Instalador .pkg (VST3 + AU en las carpetas del sistema)
+          mkdir -p pkgroot/Library/Audio/Plug-Ins/VST3 pkgroot/Library/Audio/Plug-Ins/Components pkgscripts
+          cp -R "$VST3" pkgroot/Library/Audio/Plug-Ins/VST3/
+          cp -R "$AU" pkgroot/Library/Audio/Plug-Ins/Components/
+          printf '#!/bin/bash\nkillall -9 AudioComponentRegistrar 2>/dev/null || true\nexit 0\n' > pkgscripts/postinstall
+          chmod +x pkgscripts/postinstall
+          pkgbuild --root pkgroot --scripts pkgscripts --ownership recommended \
+            --identifier com.txuso.monocheck --version "$VERSION" \
+            --install-location / "MonoCheck-${VERSION}.pkg"
+          ls -la
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vst3 = Get-ChildItem -Path build -Recurse -Directory -Filter MonoCheck.vst3 | Select-Object -First 1
+          Write-Host "Encontrado: $($vst3.FullName)"
+          Compress-Archive -Path $vst3.FullName -DestinationPath MonoCheck-VST3-Windows.zip
+
+      - name: Upload (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonoCheck-macOS
+          path: |
+            MonoCheck-*.pkg
+            MonoCheck-VST3-macOS.zip
+
+      - name: Upload (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonoCheck-Windows
+          path: MonoCheck-VST3-Windows.zip
