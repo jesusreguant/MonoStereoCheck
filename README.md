@@ -1,4 +1,4 @@
-# MonoStereoCheck
+# MonoCheck
 
 Detector mono / estéreo con picómetro, por TxuSo.
 
