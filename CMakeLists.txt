@@ -27,7 +27,7 @@ else()
 endif()
 
 juce_add_plugin(MonoCheck
-    COMPANY_NAME "MiEstudio"
+    COMPANY_NAME "TxuSo"
     PLUGIN_MANUFACTURER_CODE Mest
     PLUGIN_CODE Mchk
     FORMATS ${PLUGIN_FORMATS}
